@@ -27,6 +27,7 @@ func (hm *humanity) Add(w http.ResponseWriter, r *http.Request) {
 		Surname: r.FormValue("Surname"),
 	}
 	hm.humans = append(hm.humans, h)
+	fmt.Fprintf(w, "Add with id:%v", h.ID)
 	log.Println("Add ", h)
 }
 
@@ -51,14 +52,16 @@ func (hm *humanity) Get(w http.ResponseWriter, r *http.Request) {
 
 func (hm *humanity) Update(w http.ResponseWriter, r *http.Request) {
 	m := mux.Vars(r)
-	for _, h := range hm.humans {
+	for n, h := range hm.humans {
 		if h.ID != m["ID"] {
 			continue
 		}
 
 		h.Name = r.FormValue("Name")
 		h.Surname = r.FormValue("Surname")
+		hm.humans[n] = h
 		fmt.Fprintf(w, "Update %v with %v, %v", h.ID, h.Name, h.Surname)
+		log.Println("Update ", h)
 	}
 }
 
@@ -70,6 +73,9 @@ func (hm *humanity) Delete(w http.ResponseWriter, r *http.Request) {
 		}
 
 		hm.humans = append(hm.humans[:n], hm.humans[n+1:]...)
+
+		fmt.Fprintf(w, "Delete %v", h.ID)
+		log.Println("Delete ", h)
 	}
 }
 
@@ -94,11 +100,11 @@ func main() {
 	// DELETE
 	apiRoute.HandleFunc("/list/{ID}", hm.Delete).Methods("DELETE")
 
-	http.Handle("/", apiRoute)
+	//http.Handle("/", apiRoute)
 
 	log.Println("server started")
 
-	if err := http.ListenAndServe(*addr, nil); err != nil {
+	if err := http.ListenAndServe(*addr, mainRoute); err != nil {
 		log.Fatal(err.Error())
 	}
 }
