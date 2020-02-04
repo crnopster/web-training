@@ -12,7 +12,7 @@ func main() {
 	addr := flag.String("a", ":80", "address of app")
 	flag.Parse()
 
-	var hm *Humanity
+	var hm Humanity
 
 	mainRoute := mux.NewRouter()
 	apiRoute := mainRoute.PathPrefix("/api/v1").Subrouter()
