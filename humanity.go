@@ -58,6 +58,7 @@ func (hm *Humanity) UpdateUser(w http.ResponseWriter, r *http.Request) {
 			var h Human
 
 			errcheck(jsoniter.NewDecoder(r.Body).Decode(&h))
+			h.ID = human.ID
 			errcheck(jsoniter.NewEncoder(w).Encode(h))
 			hm.humans[index] = h
 		}
