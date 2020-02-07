@@ -3,22 +3,29 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"strconv"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 )
 
+const offset = 10
+
 type SQLHuman struct {
 	db *sql.DB
 }
 
 func newSQLHuman() *SQLHuman {
-	database, err := sql.Open("mysql", "root:1488@/mydb")
+	s := fmt.Sprintf("%v:%v@/%v", os.Getenv("MYSQL_USER"), os.Getenv("MYSQL_PASS"), os.Getenv("MYSQL_DB"))
+	database, err := sql.Open("mysql", s)
+
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Println(err)
 	}
 
 	return &SQLHuman{
@@ -27,36 +34,49 @@ func newSQLHuman() *SQLHuman {
 }
 
 func (sqlhuman *SQLHuman) Add(w http.ResponseWriter, r *http.Request) {
-	//w.Header().Set("Content-Type", "application/json")
 	var human Human
 
 	err := json.NewDecoder(r.Body).Decode(&human)
 	if err != nil {
-		log.Println(err.Error())
+		log.Println(err)
+		w.WriteHeader(http.StatusBadRequest)
+
+		return
 	}
 
 	human.ID = uuid.New().String()
-	prepared, err := sqlhuman.db.Prepare("INSERT INTO User(ID,Firstname,Lastname,Age) VALUES(?,?,?,?)")
 
+	_, err = sqlhuman.db.Exec(
+		"INSERT INTO User(ID,Firstname,Lastname,Age) VALUES(?,?,?,?)",
+		human.ID, human.Firstname, human.Lastname, human.Age,
+	)
 	if err != nil {
-		log.Println(err.Error())
-	}
-
-	_, err = prepared.Exec(human.ID, human.Firstname, human.Lastname, human.Age)
-	if err != nil {
-		log.Println(err.Error())
+		log.Println(err)
+		return
 	}
 
 	w.WriteHeader(http.StatusOK)
 }
 
 func (sqlhuman *SQLHuman) GetAll(w http.ResponseWriter, r *http.Request) {
-	//w.Header().Set("Content-Type", "application/json")
 	var humanity []Human
 
-	rows, err := sqlhuman.db.Query("SELECT ID,Firstname,Lastname,Age FROM User")
+	params := mux.Vars(r)
+	page, err := strconv.Atoi(params["PAGE"])
+
 	if err != nil {
-		log.Println(err.Error())
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	page--
+
+	offsetnum := page * offset
+
+	rows, err := sqlhuman.db.Query("SELECT ID,Firstname,Lastname,Age FROM User LIMIT ?,?", offsetnum, offset)
+	if err != nil {
+		log.Println(err)
+		return
 	}
 
 	for rows.Next() {
@@ -64,82 +84,83 @@ func (sqlhuman *SQLHuman) GetAll(w http.ResponseWriter, r *http.Request) {
 		err = rows.Scan(&h.ID, &h.Firstname, &h.Lastname, &h.Age)
 
 		if err != nil {
-			log.Println(err.Error())
+			log.Println(err)
+			continue
+		}
+
+		if err = rows.Err(); err != nil {
+			log.Println(err)
+			continue
 		}
 
 		humanity = append(humanity, h)
 	}
 
+	if len(humanity) == 0 {
+		log.Println("ErrNoRows")
+		w.WriteHeader(http.StatusNotFound)
+
+		return
+	}
+
 	err = json.NewEncoder(w).Encode(humanity)
 	if err != nil {
-		log.Println(err.Error())
+		log.Println(err)
 	}
 }
 
 func (sqlhuman *SQLHuman) GetOne(w http.ResponseWriter, r *http.Request) {
-	//w.Header().Set("Content-Type", "application/json")
 	var h Human
 
 	params := mux.Vars(r)
 
-	rows, err := sqlhuman.db.Query("SELECT ID,Firstname,Lastname,Age FROM User WHERE ID=?", params["ID"])
+	row := sqlhuman.db.QueryRow("SELECT ID,Firstname,Lastname,Age FROM User WHERE ID=?", params["ID"])
 
+	err := row.Scan(&h.ID, &h.Firstname, &h.Lastname, &h.Age)
 	if err != nil {
-		log.Println(err.Error())
-	}
-
-	for rows.Next() {
-		err = rows.Scan(&h.ID, &h.Firstname, &h.Lastname, &h.Age)
-		if err != nil {
-			log.Println(err.Error())
-		}
+		log.Println(err)
+		return
 	}
 
 	err = json.NewEncoder(w).Encode(h)
-
 	if err != nil {
 		log.Println(err.Error())
 	}
 }
 
 func (sqlhuman *SQLHuman) UpdateOne(w http.ResponseWriter, r *http.Request) {
-	//w.Header().Set("Content-Type", "application/json")
 	params := mux.Vars(r)
 
 	var h Human
 
 	err := json.NewDecoder(r.Body).Decode(&h)
 	if err != nil {
-		log.Println(err.Error())
+		log.Println(err)
+		w.WriteHeader(http.StatusBadRequest)
+
+		return
 	}
 
 	h.ID = params["ID"]
 
-	prepared, err := sqlhuman.db.Prepare("UPDATE User SET Firstname=?,Lastname=?,Age=? WHERE ID=?")
+	_, err = sqlhuman.db.Exec(
+		"UPDATE User SET Firstname=?,Lastname=?,Age=? WHERE ID=?", h.Firstname, h.Lastname, h.Age, h.ID,
+	)
 	if err != nil {
 		log.Println(err.Error())
-	}
-
-	_, err = prepared.Exec(h.Firstname, h.Lastname, h.Age, h.ID)
-	if err != nil {
-		log.Println(err.Error())
+		return
 	}
 
 	w.WriteHeader(http.StatusOK)
 }
 
 func (sqlhuman *SQLHuman) DeleteOne(w http.ResponseWriter, r *http.Request) {
-	//w.Header().Set("Content-Type", "application/json")
 	params := mux.Vars(r)
 
-	prepared, err := sqlhuman.db.Prepare("UPDATE User SET Salted=1 WHERE ID=?")
+	_, err := sqlhuman.db.Exec("UPDATE User SET Salted=1 WHERE ID=?", params["ID"])
 	if err != nil {
 		log.Println(err.Error())
-	}
-
-	_, err = prepared.Exec(params["ID"])
-	if err != nil {
-		log.Println(err.Error())
+		return
 	}
 
 	w.WriteHeader(http.StatusOK)
