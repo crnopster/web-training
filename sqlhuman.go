@@ -96,13 +96,6 @@ func (sqlhuman *SQLHuman) GetAll(w http.ResponseWriter, r *http.Request) {
 		humanity = append(humanity, h)
 	}
 
-	if len(humanity) == 0 {
-		log.Println("ErrNoRows")
-		w.WriteHeader(http.StatusNotFound)
-
-		return
-	}
-
 	err = json.NewEncoder(w).Encode(humanity)
 	if err != nil {
 		log.Println(err)
